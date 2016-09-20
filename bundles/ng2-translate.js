@@ -274,6 +274,13 @@ System.registerDynamic("src/translate.service", ["@angular/core", "rxjs/Observab
             this.defaultLang = lang;
         };
         /**
+         * Sets interpolate function
+         * @param interpolate
+         */
+        TranslateService.prototype.setInterpolator = function (interpolate) {
+            this.parser.setInterpolate(interpolate);
+        };
+        /**
          * Changes the lang currently used
          * @param lang
          * @returns {Observable<*>}
@@ -542,6 +549,21 @@ System.registerDynamic('src/translate.parser', [], true, function ($__require, e
         function Parser() {
             this.templateMatcher = /{{\s?([^{}\s]*)\s?}}/g;
         }
+        Parser.prototype.construct = function () {
+            var _this = this;
+            this._interpolate = function (expr, params) {
+                if (typeof expr !== 'string' || !params) {
+                    return expr;
+                }
+                return expr.replace(_this.templateMatcher, function (substring, b) {
+                    var r = _this.getValue(params, b);
+                    return typeof r !== 'undefined' ? r : substring;
+                });
+            };
+        };
+        Parser.prototype.setInterpolate = function (interpolate) {
+            this._interpolate = interpolate;
+        };
         /**
          * Interpolates a string to replace parameters
          * "This is a {{ key }}" ==> "This is a value", with params = { key: "value" }
@@ -550,14 +572,7 @@ System.registerDynamic('src/translate.parser', [], true, function ($__require, e
          * @returns {string}
          */
         Parser.prototype.interpolate = function (expr, params) {
-            var _this = this;
-            if (typeof expr !== 'string' || !params) {
-                return expr;
-            }
-            return expr.replace(this.templateMatcher, function (substring, b) {
-                var r = _this.getValue(params, b);
-                return typeof r !== 'undefined' ? r : substring;
-            });
+            return this._interpolate(expr, params);
         };
         /**
          * Gets a value from an object by composed key
