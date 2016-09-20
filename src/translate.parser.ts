@@ -1,5 +1,23 @@
 export class Parser {
     templateMatcher: RegExp = /{{\s?([^{}\s]*)\s?}}/g;
+    private _interpolate:Function;
+
+    construct() {
+        this._interpolate = (expr: string, params?: any): string => {
+            if (typeof expr !== 'string' || !params) {
+                return expr;
+            }
+
+            return expr.replace(this.templateMatcher, (substring: string, b: string) => {
+                var r = this.getValue(params, b);
+                return typeof r !== 'undefined' ? r : substring;
+            });
+        };
+    }
+
+    public setInterpolate(interpolate:Function) {
+        this._interpolate = interpolate;
+    }
 
     /**
      * Interpolates a string to replace parameters
@@ -9,14 +27,7 @@ export class Parser {
      * @returns {string}
      */
     public interpolate(expr: string, params?: any): string {
-        if (typeof expr !== 'string' || !params) {
-            return expr;
-        }
-        
-        return expr.replace(this.templateMatcher, (substring: string, b: string) => {
-            var r = this.getValue(params, b);
-            return typeof r !== 'undefined' ? r : substring;
-        });
+        return this._interpolate(expr, params);
     }
 
     /**
@@ -40,7 +51,7 @@ export class Parser {
                 key += '.';
             }
         } while (keys.length);
-        
+
         return target;
     }
 
