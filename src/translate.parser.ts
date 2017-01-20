@@ -18,7 +18,9 @@ export abstract class TranslateParser {
      * @param key
      * @returns {string}
      */
-    abstract getValue(target: any, key: string): string
+    abstract getValue(target: any, key: string): string;
+
+    abstract setInterpolate(interpolate:Function): void;
 }
 
 @Injectable()
@@ -36,7 +38,7 @@ export class DefaultTranslateParser extends TranslateParser {
                 let r = this.getValue(params, b);
                 return isDefined(r) ? r : substring;
             });
-        }
+        };
     }
 
     public setInterpolate(interpolate:Function) {

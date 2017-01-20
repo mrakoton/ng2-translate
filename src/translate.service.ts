@@ -182,14 +182,6 @@ export class TranslateService {
     }
 
     /**
-     * Sets interpolate function
-     * @param interpolate
-     */
-    public setInterpolator(interpolate: Function): void {
-        this.parser.setInterpolate(interpolate);
-    }
-
-    /**
      * Changes the lang currently used
      * @param lang
      * @returns {Observable<*>}
