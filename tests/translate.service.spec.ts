@@ -4,6 +4,7 @@ import {MockBackend, MockConnection} from "@angular/http/testing";
 import {
     TranslateService,
     MissingTranslationHandler,
+    MissingTranslationHandlerParams,
     TranslateLoader,
     TranslateStaticLoader,
     LangChangeEvent,
@@ -82,14 +83,28 @@ describe('TranslateService', () => {
     it("should fallback to the default language", () => {
         translate.use('fr');
 
-        translate.setDefaultLang('en');
-        translate.setTranslation('en', {"TEST": "This is a test"});
-
         translate.get('TEST').subscribe((res: string) => {
-            expect(res).toEqual('This is a test');
+            expect(res).toEqual('TEST');
+
+            translate.setDefaultLang('nl');
+            translate.setTranslation('nl', {"TEST": "Dit is een test"});
+
+            translate.get('TEST').subscribe((res2: string) => {
+                expect(res2).toEqual('Dit is een test');
+                expect(translate.getDefaultLang()).toEqual('nl');
+            });
         });
 
         mockBackendResponse(connection, '{}');
+    });
+
+    it("should use the default language by default", () => {
+        translate.setDefaultLang('nl');
+        translate.setTranslation('nl', {"TEST": "Dit is een test"});
+
+        translate.get('TEST').subscribe((res: string) => {
+            expect(res).toEqual('Dit is een test');
+        });
     });
 
     it("should return the key when it doesn't find a translation", () => {
@@ -105,6 +120,15 @@ describe('TranslateService', () => {
     it("should return the key when you haven't defined any translation", () => {
         translate.get('TEST').subscribe((res: string) => {
             expect(res).toEqual('TEST');
+        });
+    });
+
+    it('should return an empty value', () => {
+        translate.setDefaultLang('en');
+        translate.setTranslation('en', {"TEST": ""});
+
+        translate.get('TEST').subscribe((res: string) => {
+            expect(res).toEqual('');
         });
     });
 
@@ -133,6 +157,18 @@ describe('TranslateService', () => {
 
         expect(() => {
             translate.get(undefined);
+        }).toThrowError('Parameter "key" required');
+
+        expect(() => {
+            translate.get('');
+        }).toThrowError('Parameter "key" required');
+
+        expect(() => {
+            translate.get(null);
+        }).toThrowError('Parameter "key" required');
+
+        expect(() => {
+            translate.instant(undefined);
         }).toThrowError('Parameter "key" required');
     });
 
@@ -285,6 +321,12 @@ describe('TranslateService', () => {
         expect(browserLang).toBeDefined();
         expect(typeof browserLang === 'string').toBeTruthy();
     });
+
+    it('should be able to get the browserCultureLang', () => {
+        let browserCultureLand = translate.getBrowserCultureLang();
+        expect(browserCultureLand).toBeDefined();
+        expect(typeof browserCultureLand === 'string').toBeTruthy();
+    });
 });
 
 describe('MissingTranslationHandler', () => {
@@ -295,14 +337,14 @@ describe('MissingTranslationHandler', () => {
     let missingTranslationHandler: MissingTranslationHandler;
 
     class Missing implements MissingTranslationHandler {
-        handle(key: string) {
+        handle(params: MissingTranslationHandlerParams) {
             return "handled";
         }
     }
 
     class MissingObs implements MissingTranslationHandler {
-        handle(key: string): Observable<any> {
-            return Observable.of(`handled: ${key}`);
+        handle(params: MissingTranslationHandlerParams): Observable<any> {
+            return Observable.of(`handled: ${params.key}`);
         }
     }
 
@@ -310,8 +352,8 @@ describe('MissingTranslationHandler', () => {
         TestBed.configureTestingModule({
             imports: [HttpModule, TranslateModule.forRoot()],
             providers: [
-                {provide: MissingTranslationHandler, useClass: handlerClass},
-                {provide: XHRBackend, useClass: MockBackend}
+                { provide: MissingTranslationHandler, useClass: handlerClass },
+                { provide: XHRBackend, useClass: MockBackend }
             ]
         });
         injector = getTestBed();
@@ -336,7 +378,40 @@ describe('MissingTranslationHandler', () => {
         spyOn(missingTranslationHandler, 'handle').and.callThrough();
 
         translate.get('nonExistingKey').subscribe((res: string) => {
-            expect(missingTranslationHandler.handle).toHaveBeenCalledWith('nonExistingKey');
+            expect(missingTranslationHandler.handle).toHaveBeenCalledWith(jasmine.objectContaining({ key: 'nonExistingKey' }));
+            //test that the instance of the last called argument is string
+            expect(res).toEqual('handled');
+        });
+
+        // mock response after the xhr request, otherwise it will be undefined
+        mockBackendResponse(connection, '{"TEST": "This is a test"}');
+    });
+
+    it('should propagate interpolation params when the key does not exist', () => {
+        prepare(Missing);
+        translate.use('en');
+        spyOn(missingTranslationHandler, 'handle').and.callThrough();
+        let interpolateParams = { some: 'params' };
+
+        translate.get('nonExistingKey', interpolateParams).subscribe((res: string) => {
+            expect(missingTranslationHandler.handle).toHaveBeenCalledWith(jasmine.objectContaining({ interpolateParams: interpolateParams }));
+            //test that the instance of the last called argument is string
+            expect(res).toEqual('handled');
+        });
+
+        // mock response after the xhr request, otherwise it will be undefined
+        mockBackendResponse(connection, '{"TEST": "This is a test"}');
+    });
+
+    it('should propagate TranslationService params when the key does not exist', () => {
+        prepare(Missing);
+        translate.use('en');
+        spyOn(missingTranslationHandler, 'handle').and.callThrough();
+        let interpolateParams = { some: 'params' };
+
+        translate.get('nonExistingKey', interpolateParams).subscribe((res: string) => {
+            expect(missingTranslationHandler.handle).toHaveBeenCalledWith(jasmine.objectContaining({ translateService: translate }));
+            //test that the instance of the last called argument is string
             expect(res).toEqual('handled');
         });
 
@@ -346,7 +421,7 @@ describe('MissingTranslationHandler', () => {
 
     it('should return the key when using MissingTranslationHandler & the handler returns nothing', () => {
         class MissingUndef implements MissingTranslationHandler {
-            handle(key: string) {
+            handle(params: MissingTranslationHandlerParams) {
             }
         }
 
@@ -355,7 +430,7 @@ describe('MissingTranslationHandler', () => {
         spyOn(missingTranslationHandler, 'handle').and.callThrough();
 
         translate.get('nonExistingKey').subscribe((res: string) => {
-            expect(missingTranslationHandler.handle).toHaveBeenCalledWith('nonExistingKey');
+            expect(missingTranslationHandler.handle).toHaveBeenCalledWith(jasmine.objectContaining({ key: 'nonExistingKey' }));
             expect(res).toEqual('nonExistingKey');
         });
 
@@ -382,7 +457,7 @@ describe('MissingTranslationHandler', () => {
         spyOn(missingTranslationHandler, 'handle').and.callThrough();
 
         expect(translate.instant('nonExistingKey')).toEqual('handled');
-        expect(missingTranslationHandler.handle).toHaveBeenCalledWith('nonExistingKey');
+        expect(missingTranslationHandler.handle).toHaveBeenCalledWith(jasmine.objectContaining({ key: 'nonExistingKey' }));
     });
 
     it('should wait for the MissingTranslationHandler when it returns an observable & we use get', () => {
@@ -391,7 +466,7 @@ describe('MissingTranslationHandler', () => {
         spyOn(missingTranslationHandler, 'handle').and.callThrough();
 
         translate.get('nonExistingKey').subscribe((res: string) => {
-            expect(missingTranslationHandler.handle).toHaveBeenCalledWith('nonExistingKey');
+            expect(missingTranslationHandler.handle).toHaveBeenCalledWith(jasmine.objectContaining({ key: 'nonExistingKey' }));
             expect(res).toEqual('handled: nonExistingKey');
         });
 

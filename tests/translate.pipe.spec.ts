@@ -1,8 +1,11 @@
 import {TranslatePipe} from '../src/translate.pipe';
 import {TranslateService, TranslateModule} from "./../ng2-translate";
 import {ResponseOptions, Response, XHRBackend, HttpModule} from "@angular/http";
-import {Injector, ChangeDetectorRef} from "@angular/core";
-import {LangChangeEvent, TranslationChangeEvent} from "../src/translate.service";
+import {
+    Component, Injector, ChangeDetectorRef, ChangeDetectionStrategy, Injectable,
+    ViewContainerRef
+} from "@angular/core";
+import {LangChangeEvent, TranslationChangeEvent, DefaultLangChangeEvent} from "../src/translate.service";
 import {getTestBed, TestBed} from "@angular/core/testing";
 import {MockConnection, MockBackend} from "@angular/http/testing";
 
@@ -16,6 +19,20 @@ class FakeChangeDetectorRef extends ChangeDetectorRef {
     checkNoChanges(): void {}
 
     reattach(): void {}
+}
+
+@Injectable()
+@Component({
+    selector: 'hmx-app',
+    changeDetection: ChangeDetectionStrategy.OnPush,
+    template: `{{'TEST' | translate}}`
+})
+class App {
+    viewContainerRef: ViewContainerRef;
+
+    constructor(viewContainerRef: ViewContainerRef) {
+        this.viewContainerRef = viewContainerRef;
+    }
 }
 
 const mockBackendResponse = (connection: MockConnection, response: string) => {
@@ -33,6 +50,7 @@ describe('TranslatePipe', () => {
     beforeEach(() => {
         TestBed.configureTestingModule({
             imports: [HttpModule, TranslateModule.forRoot()],
+            declarations: [App],
             providers: [
                 {provide: XHRBackend, useClass: MockBackend}
             ]
@@ -91,6 +109,36 @@ describe('TranslatePipe', () => {
 
         expect(translatePipe.transform('TEST', '{param: "with param"}')).toEqual("This is a test with param");
         expect(translatePipe.transform('TEST', '{"param": "with param"}')).toEqual("This is a test with param");
+        expect(translatePipe.transform('TEST', "{param: 'with param'}")).toEqual("This is a test with param");
+        expect(translatePipe.transform('TEST', "{'param' : 'with param'}")).toEqual("This is a test with param");
+    });
+
+    it('should translate a string with object as multiple string parameters', () => {
+        translate.setTranslation('en', {"TEST": "This is a test {{param1}} {{param2}}"});
+        translate.use('en');
+
+        expect(translatePipe.transform('TEST', '{param1: "with param-1", param2: "and param-2"}'))
+            .toEqual("This is a test with param-1 and param-2");
+        expect(translatePipe.transform('TEST', '{"param1": "with param-1", "param2": "and param-2"}'))
+            .toEqual("This is a test with param-1 and param-2");
+        expect(translatePipe.transform('TEST', "{param1: 'with param-1', param2: 'and param-2'}"))
+            .toEqual("This is a test with param-1 and param-2");
+        expect(translatePipe.transform('TEST', "{'param1' : 'with param-1', 'param2': 'and param-2'}"))
+            .toEqual("This is a test with param-1 and param-2");
+    });
+
+    it('should translate a string with object as nested string parameters', () => {
+        translate.setTranslation('en', {"TEST": "This is a test {{param.one}} {{param.two}}"});
+        translate.use('en');
+
+        expect(translatePipe.transform('TEST', '{param: {one: "with param-1", two: "and param-2"}}'))
+            .toEqual("This is a test with param-1 and param-2");
+        expect(translatePipe.transform('TEST', '{"param": {"one": "with param-1", "two": "and param-2"}}'))
+            .toEqual("This is a test with param-1 and param-2");
+        expect(translatePipe.transform('TEST', "{param: {one: 'with param-1', two: 'and param-2'}}"))
+            .toEqual("This is a test with param-1 and param-2");
+        expect(translatePipe.transform('TEST', "{'param' : {'one': 'with param-1', 'two': 'and param-2'}}"))
+            .toEqual("This is a test with param-1 and param-2");
     });
 
     it('should update the value when the parameters change', () => {
@@ -177,6 +225,66 @@ describe('TranslatePipe', () => {
 
             translate.use('fr');
             mockBackendResponse(connection, `{"TEST": "C'est un test"}`);
+        });
+
+        it('should detect changes with OnPush', () => {
+            let fixture = (<any>TestBed).createComponent(App);
+            fixture.detectChanges();
+            expect(fixture.debugElement.nativeElement.innerHTML).toEqual("TEST");
+            translate.use('en');
+            mockBackendResponse(connection, '{"TEST": "This is a test"}');
+            fixture.detectChanges();
+            expect(fixture.debugElement.nativeElement.innerHTML).toEqual("This is a test");
+        });
+    });
+
+    describe('should update translations on default lang change', () => {
+        it('with static loader', (done) => {
+            translate.setTranslation('en', {"TEST": "This is a test"});
+            translate.setTranslation('fr', {"TEST": "C'est un test"});
+            translate.setDefaultLang('en');
+
+            expect(translatePipe.transform('TEST')).toEqual("This is a test");
+
+            // this will be resolved at the next lang change
+            let subscription = translate.onDefaultLangChange.subscribe((res: DefaultLangChangeEvent) => {
+                expect(res.lang).toEqual('fr');
+                expect(translatePipe.transform('TEST')).toEqual("C'est un test");
+                subscription.unsubscribe();
+                done();
+            });
+
+            translate.setDefaultLang('fr');
+        });
+
+        it('with file loader', (done) => {
+            translate.setDefaultLang('en');
+            mockBackendResponse(connection, '{"TEST": "This is a test"}');
+            expect(translatePipe.transform('TEST')).toEqual("This is a test");
+
+            // this will be resolved at the next lang change
+            let subscription = translate.onDefaultLangChange.subscribe((res: DefaultLangChangeEvent) => {
+                // let it update the translations
+                setTimeout(() => {
+                    expect(res.lang).toEqual('fr');
+                    expect(translatePipe.transform('TEST')).toEqual("C'est un test");
+                    subscription.unsubscribe();
+                    done();
+                });
+            });
+
+            translate.setDefaultLang('fr');
+            mockBackendResponse(connection, `{"TEST": "C'est un test"}`);
+        });
+
+        it('should detect changes with OnPush', () => {
+            let fixture = (<any>TestBed).createComponent(App);
+            fixture.detectChanges();
+            expect(fixture.debugElement.nativeElement.innerHTML).toEqual("TEST");
+            translate.setDefaultLang('en');
+            mockBackendResponse(connection, '{"TEST": "This is a test"}');
+            fixture.detectChanges();
+            expect(fixture.debugElement.nativeElement.innerHTML).toEqual("This is a test");
         });
     });
 });
