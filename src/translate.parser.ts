@@ -24,16 +24,27 @@ export abstract class TranslateParser {
 @Injectable()
 export class DefaultTranslateParser extends TranslateParser {
     templateMatcher: RegExp = /{{\s?([^{}\s]*)\s?}}/g;
+    private _interpolate:Function;
+
+    construct() {
+        this._interpolate = (expr: string, params?: any) => {
+            if(typeof expr !== 'string' || !params) {
+                return expr;
+            }
+
+            return expr.replace(this.templateMatcher, (substring: string, b: string) => {
+                let r = this.getValue(params, b);
+                return isDefined(r) ? r : substring;
+            });
+        }
+    }
+
+    public setInterpolate(interpolate:Function) {
+        this._interpolate = interpolate;
+    }
 
     public interpolate(expr: string, params?: any): string {
-        if(typeof expr !== 'string' || !params) {
-            return expr;
-        }
-
-        return expr.replace(this.templateMatcher, (substring: string, b: string) => {
-            let r = this.getValue(params, b);
-            return isDefined(r) ? r : substring;
-        });
+        return this._interpolate(expr, params);
     }
 
     getValue(target: any, key: string): string {
