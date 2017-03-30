@@ -90,6 +90,7 @@ export class TranslateStaticLoader implements TranslateLoader {
 
 @Injectable()
 export class TranslateService {
+    private defaultLang: string;
     /**
      * The lang currently used
      */
@@ -124,7 +125,6 @@ export class TranslateService {
 
     private pending: any;
     private translations: any = {};
-    private defaultLang: string;
     private langs: Array<string> = [];
 
     /**
